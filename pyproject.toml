@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tempest-fmt"
+authors = [{ name = "Alagyn" }]
+version = "1.0.0"
+description = "A tiny language-independent text templater for python"
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "MIT"
+keywords = [""]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Text Processing",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://github.com/alagyn/tempest"
+Issues = "https://github.com/alagyn/tempest/issues"

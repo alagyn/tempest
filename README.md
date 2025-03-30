@@ -11,6 +11,10 @@ Features:
 # Big Scary Security Warning
 This library will execute arbitrary code contained in the template. **Do not allow untrusted templates to be executed.**
 
+## Install
+
+`pip install tempest-fmt`
+
 ## Example
 
 ### Template
