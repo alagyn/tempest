@@ -1,13 +1,14 @@
-This is my file
+# This is a markdown file
 
-{if a == b:}
-    {should = True}
-    I should
+Hello my name is {name=}
 
-    Maybe
-{else:}
-    {should = False}
-    I shouldn't
-{if should:}
-    {for x in myValues:}
-        My value is {x=}
+My friends are:
+{for f in friends:}
+    - {f=}
+
+{divisor = 2}
+{for i in range(5):}
+    {if i % divisor == 0:}
+        Did you know {i=} is divisible by {divisor=}
+
+I can even evaluate stuff: {len(name)=}
