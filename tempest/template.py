@@ -5,8 +5,9 @@ from tempest.expression import BaseExpression
 
 class Template:
 
-    def __init__(self, expr: BaseExpression, source_file: str):
-        self.code = compile(expr.evaluate(), source_file, "exec")
+    def __init__(self, expr: BaseExpression):
+        codeText = expr.evaluate()
+        self.code = compile(codeText, "<string>", mode="exec")
 
     def generate(self, output: TextIO, values: dict[str, Any]):
         v = values.copy()

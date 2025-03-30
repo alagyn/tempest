@@ -31,11 +31,12 @@ class RawTextExpression(BaseExpression):
     Literal text expression
     """
 
-    def __init__(self, text: str):
+    def __init__(self, text: str, indent: int):
         self.text = text.replace("\n", "\\n")
+        self.indent = indent
 
     def evaluate(self) -> str:
-        return f'f.write("{self.text}")'
+        return "    " * self.indent + f'f.write("{self.text}")'
 
 
 class EvalExpression(BaseExpression):
@@ -43,11 +44,12 @@ class EvalExpression(BaseExpression):
     Python expression to be evaluated and stringified
     """
 
-    def __init__(self, text: str):
+    def __init__(self, text: str, indent: int):
         self.text = text
+        self.indent = indent
 
     def evaluate(self) -> str:
-        return f'f.write(str({self.text}))'
+        return "    " * self.indent + f'f.write(str({self.text}))'
 
 
 class CodeExpression(BaseExpression):
@@ -55,11 +57,9 @@ class CodeExpression(BaseExpression):
     A python conditional statement to be executed and inner expressions
     """
 
-    def __init__(self, code: str, subExprs: ExpressionList):
+    def __init__(self, code: str, indent: int):
         self.code = code
-        self.subExprs = subExprs
+        self.indent = indent
 
     def evaluate(self) -> str:
-        children = self.subExprs.evaluate()
-        children = children.replace("\n", "\n    ")
-        return self.code + ":\n    " + children
+        return "    " * self.indent + self.code

@@ -11,79 +11,139 @@ class _Parser:
 
     def __init__(self, template_file: str, open_delim: str, close_delim: str):
         with open(template_file, mode='r') as f:
-            self.text = f.read()
+            # This does not strip ending newlines
+            self.text = f.readlines()
 
-        self.filename = template_file
         self.len = len(self.text)
         self.od = open_delim
         self.cd = close_delim
         self.idx = 0
         self.depth = 0
+        self.indentSize: int = 0
 
     def parse(self) -> Template:
         out = self._recurseParse()
-        if self.depth > 0:
-            raise RuntimeError(f"Missing {self.depth} closing delimiter(s)")
-        return Template(out, self.filename)
+        return Template(out)
 
     def _recurseParse(self) -> expr.ExpressionList:
         out = expr.ExpressionList()
-        while self.idx < self.len:
-            nextExpr = self.text.find(self.od, self.idx)
-            nextCloseExpr = self.text.find(self.cd, self.idx)
 
-            if nextExpr != -1 and nextExpr < nextCloseExpr:
-                if self.idx != nextExpr:
-                    # Consume all the text up to the next expr
-                    out.addExpr(
-                        expr.RawTextExpression(self.text[self.idx:nextExpr]))
-                self.idx = nextExpr + len(self.od)
-                self.depth += 1
+        curRawText = []
+        error = False
 
-                # TODO disallow weird newlines in expressions
-
-                nextCloseExpr = self.text.find(self.cd, self.idx)
-                if nextCloseExpr == self.idx:
-                    # TODO make this better
-                    print("Warning, empty expression")
-                elif self.text.startswith(self.od, self.idx):
-                    # Double open delims indicates a block with conditions
-                    # followed by an expression list
-                    # read the expression
-                    self.idx += len(self.od)
-                    code = self.text[self.idx:nextCloseExpr]
-                    self.idx = nextCloseExpr + len(self.cd)
-                    # now recursively parse the sub expressions
-                    subExpr = self._recurseParse()
-                    out.addExpr(expr.CodeExpression(code, subExpr))
+        for lineIdx, line in enumerate(self.text):
+            # count indents
+            numIndents = 0
+            firstCharIsOpen = False
+            if self.depth > 0:
+                if self.indentSize == 0:
+                    if self.depth != 1:
+                        raise RuntimeError("Well, this shouldn't happen")
+                    # count the whitespace
+                    indent = 0
+                    for x in line:
+                        if x == " ":
+                            indent += 1
+                        else:
+                            break
+                    if indent != 0:
+                        # Don't set it if the line was empty/not indented
+                        self.indentSize = indent
+                        numIndents = 1
                 else:
-                    # otherwise it's a py expression to be evaluated
-                    out.addExpr(
-                        expr.EvalExpression(self.text[self.idx:nextCloseExpr]))
-                    self.idx = nextCloseExpr + len(self.cd)
-                    # we hit the close, so dec the depth
-                    self.depth -= 1
+                    for i in range(min(self.indentSize * self.depth,
+                                       len(line))):
+                        if line[i] != " ":
+                            numIndents = i // self.indentSize
+                            if i % self.indentSize != 0:
+                                print(
+                                    f"Warning, indentation is not consistent at line {lineIdx}, treating it as if indented {numIndents} time(s)"
+                                )
+                            break
+                        if numIndents == 0:
+                            # if we got here, then we consumed the correct amount of whitespace
+                            numIndents = self.depth
 
-            elif nextCloseExpr != -1:
-                # End of the current expression
-                # consume text and exit
-                if self.idx != nextCloseExpr:
+            textStart = numIndents * self.indentSize
+            firstCharIsOpen = line.startswith(self.od, textStart)
+
+            # handle unindents
+            if len(line.strip()) > 0 and self.depth != numIndents:
+                # go ahead and clear the current raw text if the indent changes
+                out.addExpr(
+                    expr.RawTextExpression("".join(curRawText), self.depth))
+                curRawText.clear()
+                self.depth = numIndents
+
+            exprStart = line.find(self.od)
+            if exprStart < 0:
+                # No expressions, consume the line and continue
+                curRawText.append(line[textStart:])
+                continue
+
+            exprTextStart = exprStart + len(self.od)
+            # We found an open delim, try to find the end
+            exprEnd = line.find(self.cd, exprTextStart)
+            if exprEnd < 0:
+                # TODO better logging?
+                print(
+                    f"Warning, no closing delimiter for open at line {lineIdx + 1}:{exprStart}"
+                )
+                # Treat this as raw text
+                curRawText.append(line[textStart:])
+                continue
+
+            # We found an expression, check what type it is
+            exprText = line[exprTextStart:exprEnd]
+            if exprText[-1] == ":" or exprText[-1] != "=":
+                # we have a block or a statement
+                if not firstCharIsOpen:
+                    # TODO different error if inconsistent whitespace
+                    print(
+                        f"Error, line {lineIdx + 1}: lines containing statements must only contain the statement and whitespace, '{line.strip()}'"
+                    )
+                    error = True
+                    # pretend this is valid and just ignore the start of the line
+                if exprText[-1] == ":":
+                    self.depth += 1
+                # first, take any preceeding text lines and make a raw text expression
+                if len(curRawText) > 0:
                     out.addExpr(
-                        expr.RawTextExpression(
-                            self.text[self.idx:nextCloseExpr]))
-                if self.depth == 0:
-                    # TODO maybe just make this a warning...
-                    raise RuntimeError(
-                        "Invalid closing delimiter, no open delimiter")
-                self.depth -= 1
-                # consume close delim
-                self.idx = nextCloseExpr + len(self.cd)
-                break
+                        expr.RawTextExpression("".join(curRawText),
+                                               numIndents))
+                    curRawText.clear()
+                # then make the code expression
+                out.addExpr(expr.CodeExpression(exprText, numIndents))
             else:
-                # everything else is text
-                out.addExpr(expr.RawTextExpression(self.text[self.idx:]))
-                self.idx = len(self.text)
-                break
+                # we have an expression to turn into a string
+
+                # first get preceeding text for the line
+                curRawText.append(line[textStart:exprStart])
+                out.addExpr(
+                    expr.RawTextExpression("".join(curRawText), numIndents))
+                curRawText.clear()
+
+                # then strip pull out the expression
+                if exprTextStart == exprEnd:
+                    print(
+                        f"Warning, empty expression at line {lineIdx + 1}:{exprStart}"
+                    )
+                else:
+                    out.addExpr(
+                        expr.EvalExpression(line[exprTextStart:exprEnd - 1],
+                                            numIndents))
+
+                # get remaining text for the line
+                curRawText.append(line[exprEnd + len(self.cd):])
+
+            # end for line
+
+        if len(curRawText) > 0:
+            out.addExpr(expr.RawTextExpression("".join(curRawText),
+                                               self.depth))
+
+        if error:
+            raise RuntimeError("Parse Failed")
 
         return out
 
