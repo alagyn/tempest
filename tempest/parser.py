@@ -13,6 +13,7 @@ class _Parser:
         with open(template_file, mode='r') as f:
             self.text = f.read()
 
+        self.filename = template_file
         self.len = len(self.text)
         self.od = open_delim
         self.cd = close_delim
@@ -23,7 +24,7 @@ class _Parser:
         out = self._recurseParse()
         if self.depth > 0:
             raise RuntimeError(f"Missing {self.depth} closing delimiter(s)")
-        return Template(out)
+        return Template(out, self.filename)
 
     def _recurseParse(self) -> expr.ExpressionList:
         out = expr.ExpressionList()
