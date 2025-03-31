@@ -99,8 +99,7 @@ class _Parser:
             firstCharIsOpen = False
             if self.depth > 0:
                 if self.indentSize == 0:
-                    if self.depth != 1:
-                        raise RuntimeError("Well, this shouldn't happen")
+                    assert self.depth == 1
                     # count the whitespace
                     indent = 0
                     for x in line:
