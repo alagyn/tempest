@@ -168,7 +168,9 @@ class _Parser:
 
                 # We found an expression, check what type it is
                 exprText = line[exprTextStart:exprEnd].strip()
-                if exprText[-1] == ":" or exprText[-1] != "=":
+
+                if len(exprText) > 0 and (exprText[-1] == ":"
+                                          or exprText[-1] != "="):
                     # we have a block or a statement
                     if len(expressions) > 1:
                         log.error(
@@ -208,14 +210,15 @@ class _Parser:
                                                self.depth, lineNum))
 
                     # then strip pull out the expression
-                    if exprTextStart == exprEnd:
+                    if len(exprText) > 0:
+                        out.append(
+                            _EvalExpression(exprText[:-1], self.depth,
+                                            lineNum))
+                    else:
                         log.warning(
                             f"Warning, empty expression at line {lineNum}:{exprStart}, '{line.strip()}'"
                         )
-                    else:
-                        out.append(
-                            _EvalExpression(line[exprTextStart:exprEnd - 1],
-                                            self.depth, lineNum))
+                        # just ignore it, it will get stripped
 
                     # if we have another expressoin
                     if exprIdx < len(expressions) - 1:

@@ -69,6 +69,9 @@ WIERD_DELIMS_EXP = """
 
 MISSING_CLOSE = "{if x asdf"
 
+EMPTY_EXPR = "asdf {}"
+EMPTY_EXPR_EXP = "asdf "
+
 
 class TestTempest(unittest.TestCase):
 
@@ -89,6 +92,7 @@ class TestTempest(unittest.TestCase):
         basic(WHITESPACE1, WHITESPACE1_EXP, {}, '{', '}')
         basic(WIERD_DELIMS, WIERD_DELIMS_EXP, {}, '<{', ")>")
         basic(MISSING_CLOSE, MISSING_CLOSE, {}, "{", '}')
+        basic(EMPTY_EXPR, EMPTY_EXPR_EXP, {}, "{", "}")
 
     def test_syntax_errors(self):
 
