@@ -112,7 +112,9 @@ class _Parser:
                         self.indentSize = indent
                         numIndents = 1
                 else:
-                    for idx, c in enumerate(line):
+                    for idx in range(
+                            min(self.indentSize * self.depth, len(line))):
+                        c = line[idx]
                         if c != " ":
                             numIndents = idx // self.indentSize
                             if idx % self.indentSize != 0:

@@ -47,6 +47,7 @@ WHITESPACE1 = """
     {if i % 2 == 0:}
         hmm
          {i=}
+            {i=}
          {if i == 0:}
             huh
 """
@@ -54,6 +55,7 @@ WHITESPACE1 = """
 WHITESPACE1_EXP = """
 hmm
  0
+    0
 huh
 """
 
