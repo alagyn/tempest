@@ -39,7 +39,7 @@ I can even evaluate stuff: {len(name)=}
 ```py
 import tempest
 
-t = tempest.parse_template("myTemplate.md", "{", "}")
+t = tempest.parse_template_file("myTemplate.md", "{", "}")
 
 values = {
     "name": "Jimmy",

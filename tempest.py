@@ -1,4 +1,8 @@
 from typing import TextIO, Any
+from io import StringIO
+import logging
+
+log = logging.getLogger("tempest")
 
 
 class _BaseExpression:
@@ -60,11 +64,9 @@ class _CodeExpression(_BaseExpression):
 class Template:
 
     def __init__(self, exprs: list[_BaseExpression]):
-        codeText = "\n".join([expr.evaluate() for expr in exprs])
-        try:
-            self.code = compile(codeText, "<string>", mode="exec")
-        except Exception as err:
-            raise
+        lines = [expr.evaluate() for expr in exprs]
+        codeText = "\n".join(lines)
+        self.code = compile(codeText, "<string>", mode="exec")
 
     def generate(self, output: TextIO, values: dict[str, Any]):
         v = values.copy()
@@ -74,12 +76,10 @@ class Template:
 
 class _Parser:
 
-    def __init__(self, template_file: str, open_delim: str, close_delim: str):
-        with open(template_file, mode='r') as f:
-            # This does not strip ending newlines
-            self.text = f.readlines()
+    def __init__(self, template: TextIO, open_delim: str, close_delim: str):
+        # This does not strip ending newlines
+        self.text = template.readlines()
 
-        self.filename = template_file
         self.len = len(self.text)
         self.od = open_delim
         self.cd = close_delim
@@ -91,6 +91,7 @@ class _Parser:
         out: list[_BaseExpression] = []
         error = False
 
+        overrideTextStart = -1
         for lineIdx, line in enumerate(self.text):
             lineNum = lineIdx + 1
             # count indents
@@ -112,13 +113,12 @@ class _Parser:
                         self.indentSize = indent
                         numIndents = 1
                 else:
-                    for i in range(min(self.indentSize * self.depth,
-                                       len(line))):
-                        if line[i] != " ":
-                            numIndents = i // self.indentSize
-                            if i % self.indentSize != 0:
-                                print(
-                                    f"Warning, indentation is not consistent at line {lineNum}, treating it as if indented {numIndents} time(s), '{line.strip()}'"
+                    for idx, c in enumerate(line):
+                        if c != " ":
+                            numIndents = idx // self.indentSize
+                            if idx % self.indentSize != 0:
+                                log.warning(
+                                    f"Indentation is not consistent at line {lineNum}, treating it as if indented {numIndents} time(s), '{line.strip()}'"
                                 )
                             break
                         if numIndents == 0:
@@ -140,10 +140,8 @@ class _Parser:
                     break
                 exprEnd = line.find(self.cd, exprStart + len(self.od))
                 if exprEnd < 0:
-                    print(
-                        f"Warning, no closing delimiter for open at line {lineNum}:{exprStart}, '{line.strip()}'"
-                    )
-                    # TODO
+                    # just add as is, will get handled in the for loop below
+                    expressions.append((exprStart, exprEnd))
                     break
                 idx = exprEnd + len(self.cd)
                 expressions.append((exprStart, exprEnd))
@@ -159,9 +157,8 @@ class _Parser:
                 # We found an open delim, try to find the end
                 exprEnd = line.find(self.cd, exprTextStart)
                 if exprEnd < 0:
-                    # TODO better logging?
-                    print(
-                        f"Warning, no closing delimiter for open at line {lineNum}:{exprStart}, '{line.strip()}'"
+                    log.warning(
+                        f"No closing delimiter for open at line {lineNum}:{exprStart}, '{line.strip()}'"
                     )
                     # Treat this as raw text
                     out.append(
@@ -173,19 +170,27 @@ class _Parser:
                 exprText = line[exprTextStart:exprEnd].strip()
                 if exprText[-1] == ":" or exprText[-1] != "=":
                     # we have a block or a statement
-                    if not firstCharIsOpen:
-                        # TODO different error if inconsistent whitespace
-                        print(
-                            f"Error, line {lineNum}: lines containing statements must only contain the statement and whitespace, '{line.strip()}'"
-                        )
-                        error = True
-                        # pretend this is valid and just ignore the start of the line
                     if len(expressions) > 1:
-                        print(
-                            f"Error, line {lineNum}: lines can only contain one statement, '{line.strip()}'"
+                        log.error(
+                            f"Line {lineNum}: lines can only contain one statement, '{line.strip()}'"
                         )
                         error = True
                         # pretend we can accept this, following statements will just be ignored
+                    if not firstCharIsOpen:
+                        foundText = False
+                        for x in line[:exprStart]:
+                            if x != " ":
+                                foundText = True
+                                log.error(
+                                    f"Line {lineNum}: lines containing statements must only contain the statement and whitespace, '{line.strip()}'"
+                                )
+                                error = True
+                                # pretend this is valid and just ignore the start of the line
+                        if not foundText:
+                            log.warning(
+                                f"Line {lineNum}: Extra whitespace detected, check your indentation, '{line.strip()}'"
+                            )
+
                     # make the code expression
                     out.append(_CodeExpression(exprText, self.depth, lineNum))
                     # inc depth if block
@@ -204,7 +209,7 @@ class _Parser:
 
                     # then strip pull out the expression
                     if exprTextStart == exprEnd:
-                        print(
+                        log.warning(
                             f"Warning, empty expression at line {lineNum}:{exprStart}, '{line.strip()}'"
                         )
                     else:
@@ -234,8 +239,18 @@ class _Parser:
         return Template(out)
 
 
-def parse_template(template_file: str, open_delim: str,
+def parse_template(template: TextIO, open_delim: str,
                    close_delim: str) -> Template:
 
-    p = _Parser(template_file, open_delim, close_delim)
+    p = _Parser(template, open_delim, close_delim)
     return p.parse()
+
+
+def parse_template_file(template: str, open_delim: str, close_delim: str):
+    with open(template, mode='r') as f:
+        return parse_template(f, open_delim, close_delim)
+
+
+def parse_template_str(template: str, open_delim: str, close_delim: str):
+    f = StringIO(template)
+    return parse_template(f, open_delim, close_delim)
